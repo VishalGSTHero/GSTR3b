@@ -10,6 +10,7 @@
     "test:report": "playwright test --project=chromium",
     "report:generate": "node scripts/generate-execution-report.js",
     "report:email": "node scripts/send-report-email.js",
+    "test:smtp": "node scripts/test-smtp.js",
     "codegen": "playwright codegen https://dev.gsthero.com/GspModel/login/"
   },
   "keywords": [],

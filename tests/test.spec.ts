@@ -38,12 +38,20 @@ test('GSTR-3B filing flow', async ({ page }) => {
 
   await page.getByText('GSTR 3B | Rule 61(5)').scrollIntoViewIfNeeded();
 
-  await expect(page.locator('#gstr3bUploadBtn')).toBeVisible();
-  await page.locator('#gstr3bUploadBtn').click();
+  const uploadBtn = page.locator('#gstr3bUploadBtn');
+  await expect(uploadBtn).toBeVisible();
+  await uploadBtn.scrollIntoViewIfNeeded();
+  await uploadBtn.click();
   await page.locator('img[alt="loader"]').waitFor({ state: 'hidden', timeout: 60_000 }).catch(() => {});
 
-  const gstr3bUploadModal = page.locator('#upload-and-auto-confirm-gstr3b.modal.show');
-  await expect(gstr3bUploadModal).toBeVisible({ timeout: 30_000 });
+  await page.waitForFunction(() => {
+    const modal = document.querySelector('#upload-and-auto-confirm-gstr3b');
+    if (!modal) return false;
+    return modal.classList.contains('show') || modal.getAttribute('aria-hidden') === 'false';
+  }, { timeout: 30_000 });
+
+  const gstr3bUploadModal = page.locator('#upload-and-auto-confirm-gstr3b');
+  await expect(gstr3bUploadModal.getByText('Auto Populate', { exact: true })).toBeVisible({ timeout: 15_000 });
   await gstr3bUploadModal.getByText('Auto Populate', { exact: true }).click();
 
   const autopopulateConfirm = page.locator('#nilGSTR3B');
