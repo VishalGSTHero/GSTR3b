@@ -40,9 +40,10 @@ test('GSTR-3B filing flow', async ({ page }) => {
 
   await expect(page.locator('#gstr3bUploadBtn')).toBeVisible();
   await page.locator('#gstr3bUploadBtn').click();
+  await page.locator('img[alt="loader"]').waitFor({ state: 'hidden', timeout: 60_000 }).catch(() => {});
 
-  const gstr3bUploadModal = page.locator('#upload-and-auto-confirm-gstr3b');
-  await expect(gstr3bUploadModal).toBeVisible();
+  const gstr3bUploadModal = page.locator('#upload-and-auto-confirm-gstr3b.modal.show');
+  await expect(gstr3bUploadModal).toBeVisible({ timeout: 30_000 });
   await gstr3bUploadModal.getByText('Auto Populate', { exact: true }).click();
 
   const autopopulateConfirm = page.locator('#nilGSTR3B');

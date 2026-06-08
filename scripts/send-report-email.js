@@ -98,24 +98,61 @@ function appendAuditLog(summary, message) {
   fs.appendFileSync(auditPath, `[${timestamp}] ${message}\n`);
 }
 
+function normalizeGmailPassword(password) {
+  return String(password).replace(/\s+/g, '');
+}
+
+function buildSmtpTransport(host, port, user, pass) {
+  const isGmail = host.includes('gmail.com');
+  const secure = port === 465;
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: { user, pass: isGmail ? normalizeGmailPassword(pass) : pass },
+    ...(isGmail && !secure
+      ? { requireTLS: true, tls: { minVersion: 'TLSv1.2' } }
+      : {}),
+  });
+}
+
+function gmailCredentialHint(errorMessage) {
+  if (!String(errorMessage).includes('535')) return '';
+  return [
+    '',
+    'Gmail fix checklist:',
+    '1. Enable 2-Step Verification on the sender Gmail account',
+    '2. Create an App Password at https://myaccount.google.com/apppasswords',
+    '3. Set SMTP_PASSWORD to the 16-character app password (not your normal Gmail password)',
+    '4. SMTP_USER must exactly match the Gmail account that created the app password',
+    '5. SMTP_HOST=smtp.gmail.com and SMTP_PORT=587',
+  ].join('\n');
+}
+
 async function sendWithRetry(summary) {
-  const host = process.env.SMTP_HOST;
+  const host = process.env.SMTP_HOST?.trim();
   const port = Number(process.env.SMTP_PORT ?? 587);
-  const user = process.env.SMTP_USER;
+  const user = process.env.SMTP_USER?.trim();
   const pass = process.env.SMTP_PASSWORD;
-  const from = process.env.SMTP_FROM ?? user;
+  const from = process.env.SMTP_FROM?.trim() ?? user;
   const to = process.env.REPORT_EMAIL_TO ?? 'vishal.ghaste@gsthero.com';
 
   if (!host || !user || !pass) {
-    throw new Error('Missing SMTP_HOST, SMTP_USER, or SMTP_PASSWORD environment variables.');
+    throw new Error('Missing SMTP_HOST, SMTP_USER, or SMTP_PASSWORD GitHub secrets.');
   }
 
-  const transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-  });
+  console.log(`Sending report email via ${host}:${port} as ${user} to ${to}`);
+
+  const transporter = buildSmtpTransport(host, port, user, pass);
+
+  try {
+    await transporter.verify();
+    console.log('SMTP connection verified successfully.');
+  } catch (error) {
+    const hint = gmailCredentialHint(error.message);
+    throw new Error(`SMTP verification failed: ${error.message}${hint}`);
+  }
 
   const mailOptions = {
     from,
@@ -134,8 +171,9 @@ async function sendWithRetry(summary) {
       return;
     } catch (error) {
       lastError = error;
-      appendAuditLog(summary, `Email attempt ${attempt} failed: ${error.message}`);
-      console.error(`Email attempt ${attempt} failed: ${error.message}`);
+      const hint = gmailCredentialHint(error.message);
+      appendAuditLog(summary, `Email attempt ${attempt} failed: ${error.message}${hint}`);
+      console.error(`Email attempt ${attempt} failed: ${error.message}${hint}`);
       if (attempt < MAX_RETRIES) {
         const delay = RETRY_DELAYS_MS[attempt - 1] ?? 30000;
         console.log(`Retrying email in ${delay / 1000}s...`);
