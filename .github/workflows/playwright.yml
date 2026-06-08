@@ -18,6 +18,11 @@ jobs:
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
     - name: Run Playwright tests
+      env:
+        GSTHERO_EMAIL: ${{ secrets.GSTHERO_EMAIL }}
+        GSTHERO_PASSWORD: ${{ secrets.GSTHERO_PASSWORD }}
+        GSTHERO_GSTIN: ${{ secrets.GSTHERO_GSTIN }}
+        GSTHERO_RETURN_MONTH: ${{ secrets.GSTHERO_RETURN_MONTH }}
       run: npx playwright test
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}

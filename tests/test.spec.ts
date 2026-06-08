@@ -1,10 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { loginToGstHero } from './helpers/login';
+import { getReturnMonth } from './helpers/returnMonth';
 
 const EMAIL = process.env.GSTHERO_EMAIL ?? '';
 const PASSWORD = process.env.GSTHERO_PASSWORD ?? '';
 const GSTIN = process.env.GSTHERO_GSTIN ?? '33AFPPB3931BAZR';
-const RETURN_MONTH = process.env.GSTHERO_RETURN_MONTH ?? 'Apr';
+const RETURN_MONTH = getReturnMonth();
 
 test.beforeAll(() => {
   if (!EMAIL || !PASSWORD) {
