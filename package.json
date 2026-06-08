@@ -7,6 +7,9 @@
     "test": "playwright test tests/test.spec.ts",
     "test:headed": "playwright test tests/test.spec.ts --headed",
     "test:ui": "playwright test --ui",
+    "test:report": "playwright test --project=chromium",
+    "report:generate": "node scripts/generate-execution-report.js",
+    "report:email": "node scripts/send-report-email.js",
     "codegen": "playwright codegen https://dev.gsthero.com/GspModel/login/"
   },
   "keywords": [],
@@ -16,6 +19,7 @@
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "@types/node": "^25.9.1",
-    "dotenv": "^16.6.1"
+    "dotenv": "^16.6.1",
+    "nodemailer": "^7.0.3"
   }
 }

@@ -1,0 +1,137 @@
+name: Monthly Automation Scheduler
+
+# 11:00 AM IST = 05:30 AM UTC (IST is UTC+5:30)
+on:
+  schedule:
+    - cron: '30 5 18 * *'
+  workflow_dispatch:
+
+jobs:
+  monthly-automation:
+    name: Monthly GSTR-3B Automation
+    timeout-minutes: 90
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Kolkata
+      CI: true
+      GENERATE_EXECUTION_REPORT: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Compute Playwright cache bucket (4 days)
+        id: pw-cache
+        shell: bash
+        run: echo "bucket=$(( $(date +%s) / 345600 ))" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ steps.pw-cache.outputs.bucket }}
+          restore-keys: |
+            playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            playwright-chromium-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Prepare execution log directories
+        run: mkdir -p execution-logs reports
+
+      - name: Record execution start time (IST)
+        id: timing-start
+        shell: bash
+        run: |
+          echo "start_iso=$(date -Iseconds)" >> "$GITHUB_OUTPUT"
+          echo "start_display=$(date '+%d %B %Y, %I:%M:%S %p IST')" >> "$GITHUB_OUTPUT"
+          echo "[$(date '+%Y-%m-%d %H:%M:%S %Z')] Monthly automation started" >> execution-logs/scheduler.log
+
+      - name: Run complete automation test suite
+        id: run-tests
+        continue-on-error: true
+        env:
+          GSTHERO_EMAIL: ${{ secrets.GSTHERO_EMAIL }}
+          GSTHERO_PASSWORD: ${{ secrets.GSTHERO_PASSWORD }}
+          GSTHERO_GSTIN: ${{ secrets.GSTHERO_GSTIN }}
+          GSTHERO_RETURN_MONTH: ${{ secrets.GSTHERO_RETURN_MONTH }}
+        run: |
+          set -o pipefail
+          npx playwright test --project=chromium 2>&1 | tee execution-logs/playwright-console.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Record execution end time (IST)
+        id: timing-end
+        shell: bash
+        run: |
+          echo "end_iso=$(date -Iseconds)" >> "$GITHUB_OUTPUT"
+          echo "end_display=$(date '+%d %B %Y, %I:%M:%S %p IST')" >> "$GITHUB_OUTPUT"
+          echo "[$(date '+%Y-%m-%d %H:%M:%S %Z')] Monthly automation completed" >> execution-logs/scheduler.log
+
+      - name: Generate execution report
+        env:
+          EXECUTION_START_ISO: ${{ steps.timing-start.outputs.start_iso }}
+          EXECUTION_END_ISO: ${{ steps.timing-end.outputs.end_iso }}
+          WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GSTHERO_GSTIN: ${{ secrets.GSTHERO_GSTIN }}
+          GSTHERO_RETURN_MONTH: ${{ secrets.GSTHERO_RETURN_MONTH }}
+          RUNNER_OS: ${{ runner.os }}
+        run: node scripts/generate-execution-report.js
+
+      - name: Send management email report
+        id: send-email
+        continue-on-error: true
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          REPORT_EMAIL_TO: vishal.ghaste@gsthero.com
+          EMAIL_MAX_RETRIES: 3
+        run: node scripts/send-report-email.js
+
+      - name: Record email delivery status
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.send-email.outcome }}" = "success" ]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S %Z')] Management email delivered successfully" >> execution-logs/scheduler.log
+          else
+            echo "[$(date '+%Y-%m-%d %H:%M:%S %Z')] Management email delivery failed" >> execution-logs/scheduler.log
+          fi
+
+      - name: Upload execution artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: monthly-automation-${{ github.run_id }}
+          path: |
+            execution-logs/
+            reports/
+            playwright-report/
+            test-results/
+          retention-days: 2
+
+      - name: Fail workflow if tests failed
+        if: steps.run-tests.outcome == 'failure'
+        run: |
+          echo "Automation tests failed. Report and logs were still generated."
+          exit 1
+
+      - name: Fail workflow if email delivery failed
+        if: steps.send-email.outcome == 'failure'
+        run: |
+          echo "Email delivery failed after retries."
+          exit 1
