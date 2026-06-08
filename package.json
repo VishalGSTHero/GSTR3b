@@ -1,0 +1,21 @@
+{
+  "name": "gstr3b_test",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "playwright test tests/test.spec.ts",
+    "test:headed": "playwright test tests/test.spec.ts --headed",
+    "test:ui": "playwright test --ui",
+    "codegen": "playwright codegen https://dev.gsthero.com/GspModel/login/"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@types/node": "^25.9.1",
+    "dotenv": "^16.6.1"
+  }
+}
