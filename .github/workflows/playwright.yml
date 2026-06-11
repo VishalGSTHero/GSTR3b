@@ -35,6 +35,23 @@ jobs:
           playwright-chromium-${{ runner.os }}-
     - name: Install dependencies
       run: npm ci
+    - name: Validate required secrets
+      shell: bash
+      run: |
+        missing=0
+        for key in GSTHERO_EMAIL GSTHERO_PASSWORD; do
+          if [ -z "${!key}" ]; then
+            echo "::error::Missing GitHub secret: $key"
+            missing=1
+          fi
+        done
+        if [ "$missing" -eq 1 ]; then
+          exit 1
+        fi
+        echo "GSTHERO credentials are configured."
+      env:
+        GSTHERO_EMAIL: ${{ secrets.GSTHERO_EMAIL }}
+        GSTHERO_PASSWORD: ${{ secrets.GSTHERO_PASSWORD }}
     - name: Prepare report directories
       run: mkdir -p execution-logs reports
     - name: Install Playwright Chromium
@@ -51,7 +68,9 @@ jobs:
         GSTHERO_PASSWORD: ${{ secrets.GSTHERO_PASSWORD }}
         GSTHERO_GSTIN: ${{ secrets.GSTHERO_GSTIN }}
         GSTHERO_RETURN_MONTH: ${{ secrets.GSTHERO_RETURN_MONTH }}
-      run: npx playwright test --project=chromium
+      run: |
+        echo "Return month: ${GSTHERO_RETURN_MONTH:-auto (previous calendar month)}"
+        npx playwright test --project=chromium
     - name: Record execution end time
       id: timing-end
       if: always()

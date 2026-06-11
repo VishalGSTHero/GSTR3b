@@ -46,10 +46,16 @@ test('GSTR-3B filing flow', async ({ page }) => {
   await uploadBtn.click();
   await waitForPageReady(page);
 
-  const gstr3bUploadModal = page.locator('#upload-and-auto-confirm-gstr3b');
-  const autoPopulateBtn = gstr3bUploadModal.getByText('Auto Populate', { exact: true });
+  const otpModal = page.getByText('Verify OTP to connect to the GST Network');
+  if (await otpModal.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    throw new Error(
+      'GSTN OTP popup appeared. Complete OTP setup in GSTHero or resolve the environment issue before automation can continue.',
+    );
+  }
+
+  const autoPopulateBtn = page.locator('.gstr3BAutoPopulateBtnInPopup');
   await expect(autoPopulateBtn).toBeVisible({ timeout: 30_000 });
-  await gstr3bUploadModal.getByText('Auto Populate', { exact: true }).click();
+  await autoPopulateBtn.click();
 
   const autopopulateConfirm = page.locator('#nilGSTR3B');
   await autopopulateConfirm.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});

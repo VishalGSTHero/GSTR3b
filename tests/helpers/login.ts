@@ -1,4 +1,17 @@
-import { Page, expect } from '@playwright/test';
+import { Page, expect, Locator } from '@playwright/test';
+
+async function fillInputValue(input: Locator, value: string): Promise<void> {
+  await input.evaluate((el, nextValue) => {
+    const field = el as HTMLInputElement;
+    field.removeAttribute('maxlength');
+    field.maxLength = 9999;
+    field.value = nextValue;
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    field.dispatchEvent(new Event('change', { bubbles: true }));
+  }, value);
+
+  await expect(input).toHaveValue(value);
+}
 
 /**
  * Logs into GSTHero dev environment.
@@ -10,30 +23,37 @@ export async function loginToGstHero(
   password: string,
 ): Promise<void> {
   await page.goto('https://dev.gsthero.com/GspModel/login/', {
-    waitUntil: 'load',
+    waitUntil: 'domcontentloaded',
   });
 
   const emailInput = page.locator('#email');
   await expect(emailInput).toBeVisible();
-  await emailInput.fill(email);
-
+  await fillInputValue(emailInput, email);
   await page.getByRole('button', { name: 'Continue' }).first().click();
 
   const passwordInForm = page.locator('#password');
-  const passwordInDialog = page.getByRole('dialog').locator('input[type="password"]');
-  const passwordField = passwordInForm.or(passwordInDialog).first();
-
-  await expect(passwordField).toBeVisible({ timeout: 30_000 });
-  await passwordField.fill(password);
-
   const dialog = page.getByRole('dialog');
+  const passwordInDialog = dialog.locator('input[type="password"]');
+
+  await expect(passwordInForm.or(passwordInDialog).first()).toBeVisible({ timeout: 30_000 });
+
   if (await dialog.isVisible()) {
-    await dialog.locator('input[type="password"]').fill(password);
+    await fillInputValue(passwordInDialog, password);
     await dialog.getByRole('button', { name: 'Sign In' }).click();
   } else {
+    await fillInputValue(passwordInForm, password);
     await page.getByRole('button', { name: 'Continue' }).first().click();
   }
 
-  await page.locator('img[alt="loader"]').waitFor({ state: 'hidden', timeout: 90_000 }).catch(() => {});
-  await expect(page).toHaveURL(/\/GspModel\/user\//, { timeout: 90_000 });
+  try {
+    await expect(page).toHaveURL(/\/GspModel\/user\//, { timeout: 90_000 });
+  } catch {
+    throw new Error(
+      'Login failed on GSTHero. Verify GSTHERO_EMAIL and GSTHERO_PASSWORD in GitHub Secrets or your .env file.',
+    );
+  }
+
+  await page.locator('img[alt="loader"], .loader-component').first()
+    .waitFor({ state: 'hidden', timeout: 90_000 })
+    .catch(() => {});
 }
