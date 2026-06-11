@@ -91,10 +91,33 @@ jobs:
     - name: Publish test results summary
       if: always()
       run: node scripts/publish-github-summary.js
+    - name: Check SMTP configuration
+      if: always()
+      id: smtp-check
+      shell: bash
+      run: |
+        missing=0
+        for key in SMTP_HOST SMTP_USER SMTP_PASSWORD REPORT_EMAIL_TO; do
+          if [ -z "${!key}" ]; then
+            echo "::warning::Missing GitHub secret for email reports: $key"
+            missing=1
+          fi
+        done
+        if [ "$missing" -eq 0 ]; then
+          echo "smtp_ready=true" >> "$GITHUB_OUTPUT"
+          echo "SMTP configured. Report will be emailed to: $REPORT_EMAIL_TO"
+        else
+          echo "smtp_ready=false" >> "$GITHUB_OUTPUT"
+          echo "Email report will be skipped until all SMTP secrets are added."
+        fi
+      env:
+        SMTP_HOST: ${{ secrets.SMTP_HOST }}
+        SMTP_USER: ${{ secrets.SMTP_USER }}
+        SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        REPORT_EMAIL_TO: ${{ secrets.REPORT_EMAIL_TO }}
     - name: Send email report
       id: send-email
-      if: always()
-      continue-on-error: true
+      if: always() && steps.smtp-check.outputs.smtp_ready == 'true'
       env:
         SMTP_HOST: ${{ secrets.SMTP_HOST }}
         SMTP_PORT: ${{ secrets.SMTP_PORT }}
@@ -104,6 +127,18 @@ jobs:
         REPORT_EMAIL_TO: ${{ secrets.REPORT_EMAIL_TO }}
         REPORT_PROJECT_NAME: GSTR-3B Automation
       run: node scripts/send-report-email.js
+    - name: Email delivery status
+      if: always()
+      shell: bash
+      run: |
+        if [ "${{ steps.smtp-check.outputs.smtp_ready }}" != "true" ]; then
+          echo "::warning::No email sent — add SMTP_HOST, SMTP_USER, SMTP_PASSWORD, and REPORT_EMAIL_TO in GitHub Secrets."
+        elif [ "${{ steps.send-email.outcome }}" = "success" ]; then
+          echo "Email report sent successfully to configured recipient(s)."
+        elif [ "${{ steps.send-email.outcome }}" = "failure" ]; then
+          echo "::error::Email delivery failed. Check SMTP credentials (Gmail needs an App Password)."
+          exit 1
+        fi
     - uses: actions/upload-artifact@v4
       if: always()
       with:

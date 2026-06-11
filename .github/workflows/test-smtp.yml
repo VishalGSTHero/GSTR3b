@@ -44,5 +44,5 @@ jobs:
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
-          REPORT_EMAIL_TO: vishal.ghaste@gsthero.com
+          REPORT_EMAIL_TO: ${{ secrets.REPORT_EMAIL_TO }}
         run: node scripts/test-smtp.js
