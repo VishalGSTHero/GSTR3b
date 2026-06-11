@@ -64,7 +64,9 @@ jobs:
           echo "SMTP_HOST is configured"
           echo "SMTP_USER is configured"
           echo "SMTP_PORT will default to 587 if not set"
-          echo "Report recipient: vishal.ghaste@gsthero.com"
+          if [ -z "$REPORT_EMAIL_TO" ]; then
+            echo "::warning::REPORT_EMAIL_TO secret not set; email step may use default recipient"
+          fi
         env:
           GSTHERO_EMAIL: ${{ secrets.GSTHERO_EMAIL }}
           GSTHERO_PASSWORD: ${{ secrets.GSTHERO_PASSWORD }}
@@ -113,6 +115,12 @@ jobs:
           RUNNER_OS: ${{ runner.os }}
         run: node scripts/generate-execution-report.js
 
+      - name: Publish test results summary
+        if: always()
+        env:
+          REPORT_PROJECT_NAME: GSTR-3B Automation
+        run: node scripts/publish-github-summary.js
+
       - name: Send management email report
         id: send-email
         continue-on-error: true
@@ -122,7 +130,8 @@ jobs:
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
-          REPORT_EMAIL_TO: vishal.ghaste@gsthero.com
+          REPORT_EMAIL_TO: ${{ secrets.REPORT_EMAIL_TO }}
+          REPORT_PROJECT_NAME: GSTR-3B Automation
           EMAIL_MAX_RETRIES: 3
         run: node scripts/send-report-email.js
 

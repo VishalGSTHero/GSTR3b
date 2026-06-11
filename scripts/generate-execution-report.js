@@ -20,12 +20,21 @@ function parsePlaywrightResults(report) {
       for (const spec of suite.specs ?? []) {
         const specTitle = [...titles, spec.title].filter(Boolean).join(' > ');
         for (const test of spec.tests ?? []) {
-          const result = test.results?.[test.results.length - 1];
+          const results = test.results ?? [];
+          const result = results[results.length - 1];
           if (!result) continue;
+
+          const hadFailure = results.some((r) =>
+            ['failed', 'timedOut', 'interrupted', 'unexpected'].includes(r.status),
+          );
+          const isFlaky =
+            result.status === 'flaky' ||
+            (result.status === 'passed' && hadFailure && results.length > 1);
+
           cases.push({
             title: specTitle || spec.title || 'Unknown test',
             file: spec.file ?? suite.file ?? 'unknown',
-            status: result.status,
+            status: isFlaky ? 'flaky' : result.status,
             durationMs: result.duration ?? 0,
             error: stripAnsi(result.error?.message ?? result.errors?.map((e) => e.message).join('\n') ?? null),
           });
@@ -40,6 +49,7 @@ function parsePlaywrightResults(report) {
 }
 
 function countByStatus(cases) {
+  const flaky = cases.filter((c) => c.status === 'flaky').length;
   const passed = cases.filter((c) => c.status === 'passed' || c.status === 'expected').length;
   const failed = cases.filter((c) => ['failed', 'timedOut', 'interrupted', 'unexpected'].includes(c.status)).length;
   const skipped = cases.filter((c) => c.status === 'skipped').length;
@@ -48,6 +58,7 @@ function countByStatus(cases) {
     passed,
     failed,
     skipped,
+    flaky,
   };
 }
 
@@ -106,11 +117,15 @@ function buildSummaryHtml(summary) {
   <p><strong>Execution End:</strong> ${escapeHtml(summary.endTime)}</p>
   <p><strong>Total Duration:</strong> ${escapeHtml(summary.duration)}</p>
 
-  <h2>Summary</h2>
-  <p class="metric"><strong>Total Executed:</strong> ${summary.counts.total}</p>
-  <p class="metric passed"><strong>Passed:</strong> ${summary.counts.passed}</p>
-  <p class="metric failed"><strong>Failed:</strong> ${summary.counts.failed}</p>
-  <p class="metric skipped"><strong>Skipped:</strong> ${summary.counts.skipped}</p>
+  <h2>Test Results</h2>
+  <table>
+    <tr><th>Metric</th><th>Count</th></tr>
+    <tr><td class="passed">Passed</td><td>${summary.counts.passed}</td></tr>
+    <tr><td class="failed">Failed</td><td>${summary.counts.failed}</td></tr>
+    <tr><td class="skipped">Skipped</td><td>${summary.counts.skipped}</td></tr>
+    <tr><td>Flaky</td><td>${summary.counts.flaky}</td></tr>
+    <tr><td><strong>Total</strong></td><td><strong>${summary.counts.total}</strong></td></tr>
+  </table>
 
   <h2>Environment Details</h2>
   <table>
@@ -242,7 +257,7 @@ function main() {
   const auditLines = [
     `[${summary.startTime}] Monthly automation execution started`,
     `[${summary.endTime}] Monthly automation execution completed`,
-    `Total: ${counts.total}, Passed: ${counts.passed}, Failed: ${counts.failed}, Skipped: ${counts.skipped}`,
+    `Total: ${counts.total}, Passed: ${counts.passed}, Failed: ${counts.failed}, Skipped: ${counts.skipped}, Flaky: ${counts.flaky}`,
     `Duration: ${summary.duration}`,
     `Report JSON: ${summary.paths.summaryJson}`,
     `Report HTML: ${summary.paths.summaryHtml}`,

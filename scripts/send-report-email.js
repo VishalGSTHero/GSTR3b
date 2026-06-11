@@ -36,7 +36,7 @@ function stripAnsi(value) {
   return String(value).replace(/\u001b\[[0-9;]*m/g, '');
 }
 
-function buildEmailBody(summary) {
+function buildEmailText(summary) {
   const failedList = summary.failedTests.length
     ? summary.failedTests
         .map((test, index) => `${index + 1}. ${test.title}\n   Error: ${stripAnsi(test.error || 'No error message captured')}`)
@@ -45,17 +45,19 @@ function buildEmailBody(summary) {
 
   return `Dear Management,
 
-Please find below the automation execution summary for the scheduled monthly execution.
+Please find below the automation execution summary.
 
 Execution Date: ${summary.executionDate}
 Execution Time: ${summary.executionTime}
+Duration: ${summary.duration}
 
-Summary:
-
-* Total Executed: ${summary.counts.total}
-* Passed: ${summary.counts.passed}
-* Failed: ${summary.counts.failed}
-* Skipped: ${summary.counts.skipped}
+Test Results
+------------
+Passed:  ${summary.counts.passed}
+Failed:  ${summary.counts.failed}
+Skipped: ${summary.counts.skipped}
+Flaky:   ${summary.counts.flaky}
+Total:   ${summary.counts.total}
 
 Detailed Report:
 ${summary.reportLink}
@@ -67,6 +69,55 @@ Please review the attached report for complete execution details.
 
 Regards,
 QA Automation Team`;
+}
+
+function buildEmailHtml(summary) {
+  const projectName = process.env.REPORT_PROJECT_NAME ?? 'GSTR-3B Automation';
+  const failedRows = summary.failedTests.length
+    ? summary.failedTests
+        .map(
+          (test, index) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${escapeHtml(test.title)}</td>
+          <td><pre>${escapeHtml(stripAnsi(test.error || 'No error message captured'))}</pre></td>
+        </tr>`,
+        )
+        .join('')
+    : '<tr><td colspan="3">No failed scenarios.</td></tr>';
+
+  return `<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; color: #222;">
+  <h2 style="color: #1f3b63;">Test Results</h2>
+  <table cellpadding="8" cellspacing="0" style="border-collapse: collapse; min-width: 280px;">
+    <tr style="background: #f3f6fa;"><th align="left">Metric</th><th align="right">Count</th></tr>
+    <tr><td style="color: #1b7f3b;">Passed</td><td align="right">${summary.counts.passed}</td></tr>
+    <tr><td style="color: #b42318;">Failed</td><td align="right">${summary.counts.failed}</td></tr>
+    <tr><td style="color: #8a6d1d;">Skipped</td><td align="right">${summary.counts.skipped}</td></tr>
+    <tr><td>Flaky</td><td align="right">${summary.counts.flaky}</td></tr>
+    <tr><td><strong>Total</strong></td><td align="right"><strong>${summary.counts.total}</strong></td></tr>
+  </table>
+  <p><strong>Execution Date:</strong> ${escapeHtml(summary.executionDate)}<br/>
+  <strong>Duration:</strong> ${escapeHtml(summary.duration)}<br/>
+  <strong>Report:</strong> <a href="${escapeHtml(summary.reportLink)}">${escapeHtml(summary.reportLink)}</a></p>
+  <h3>Failed Scenarios</h3>
+  <table cellpadding="8" cellspacing="0" border="1" style="border-collapse: collapse; width: 100%;">
+    <tr style="background: #f3f6fa;"><th>#</th><th>Test Case</th><th>Error</th></tr>
+    ${failedRows}
+  </table>
+  <hr/>
+  <p style="color: #666; font-size: 12px;">${escapeHtml(projectName)} · GitHub Actions</p>
+</body>
+</html>`;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
 }
 
 function getAttachments(summary) {
@@ -158,7 +209,8 @@ async function sendWithRetry(summary) {
     from,
     to: to.split(',').map((email) => email.trim()).filter(Boolean),
     subject: summary.subject,
-    text: buildEmailBody(summary),
+    text: buildEmailText(summary),
+    html: buildEmailHtml(summary),
     attachments: getAttachments(summary),
   };
 

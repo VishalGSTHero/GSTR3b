@@ -7,9 +7,11 @@
     "test": "playwright test tests/test.spec.ts",
     "test:headed": "playwright test tests/test.spec.ts --headed",
     "test:ui": "playwright test --ui",
-    "test:report": "playwright test --project=chromium",
+    "test:report": "node scripts/run-tests-with-report.js",
+    "test:full": "npm run test:report && npm run report:generate && npm run report:email",
     "report:generate": "node scripts/generate-execution-report.js",
     "report:email": "node scripts/send-report-email.js",
+    "report:summary": "node scripts/publish-github-summary.js",
     "test:smtp": "node scripts/test-smtp.js",
     "codegen": "playwright codegen https://dev.gsthero.com/GspModel/login/"
   },
