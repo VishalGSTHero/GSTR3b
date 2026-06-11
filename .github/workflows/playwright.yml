@@ -97,4 +97,6 @@ jobs:
         retention-days: 2
     - name: Fail workflow if tests failed
       if: steps.run-tests.outcome == 'failure'
-      run: exit 1
+      run: |
+        echo "::error::Playwright tests failed. Open the 'Run Playwright tests' step above for the exact error."
+        exit 1

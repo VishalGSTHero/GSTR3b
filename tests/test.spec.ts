@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { loginToGstHero } from './helpers/login';
 import { getReturnMonth } from './helpers/returnMonth';
+import { waitForPageReady } from './helpers/waitForPageReady';
 
 const EMAIL = process.env.GSTHERO_EMAIL ?? '';
 const PASSWORD = process.env.GSTHERO_PASSWORD ?? '';
@@ -17,10 +18,11 @@ test('GSTR-3B filing flow', async ({ page }) => {
   test.setTimeout(180_000);
 
   await loginToGstHero(page, EMAIL, PASSWORD);
-  await expect(page.getByRole('heading', { name: 'Business Dashboard' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Business Dashboard' })).toBeVisible({ timeout: 30_000 });
+  await waitForPageReady(page);
 
   await page.getByText('GST Return', { exact: true }).first().click();
-  await page.locator('img[alt="loader"]').waitFor({ state: 'hidden', timeout: 60_000 }).catch(() => {});
+  await waitForPageReady(page);
 
   const searchBox = page.locator('input[type="search"]');
   await expect(searchBox).toBeVisible({ timeout: 30_000 });
@@ -34,7 +36,7 @@ test('GSTR-3B filing flow', async ({ page }) => {
   await page.locator('#clientDashReturnPeriod').click();
   await expect(page.getByText(RETURN_MONTH, { exact: true })).toBeVisible({ timeout: 60_000 });
   await page.getByText(RETURN_MONTH, { exact: true }).click();
-  await page.locator('img[alt="loader"]').waitFor({ state: 'hidden', timeout: 60_000 }).catch(() => {});
+  await waitForPageReady(page);
 
   await page.getByText('GSTR 3B | Rule 61(5)').scrollIntoViewIfNeeded();
 
@@ -42,16 +44,11 @@ test('GSTR-3B filing flow', async ({ page }) => {
   await expect(uploadBtn).toBeVisible();
   await uploadBtn.scrollIntoViewIfNeeded();
   await uploadBtn.click();
-  await page.locator('img[alt="loader"]').waitFor({ state: 'hidden', timeout: 60_000 }).catch(() => {});
-
-  await page.waitForFunction(() => {
-    const modal = document.querySelector('#upload-and-auto-confirm-gstr3b');
-    if (!modal) return false;
-    return modal.classList.contains('show') || modal.getAttribute('aria-hidden') === 'false';
-  }, { timeout: 30_000 });
+  await waitForPageReady(page);
 
   const gstr3bUploadModal = page.locator('#upload-and-auto-confirm-gstr3b');
-  await expect(gstr3bUploadModal.getByText('Auto Populate', { exact: true })).toBeVisible({ timeout: 15_000 });
+  const autoPopulateBtn = gstr3bUploadModal.getByText('Auto Populate', { exact: true });
+  await expect(autoPopulateBtn).toBeVisible({ timeout: 30_000 });
   await gstr3bUploadModal.getByText('Auto Populate', { exact: true }).click();
 
   const autopopulateConfirm = page.locator('#nilGSTR3B');
@@ -61,5 +58,5 @@ test('GSTR-3B filing flow', async ({ page }) => {
     await page.locator('#uploadDataConfirm').click();
   }
 
-  await page.locator('img[alt="loader"]').waitFor({ state: 'hidden', timeout: 90_000 }).catch(() => {});
+  await waitForPageReady(page, 90_000);
 });
